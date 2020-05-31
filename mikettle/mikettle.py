@@ -39,6 +39,7 @@ MI_ACTION_MAP = {
 MI_MODE_MAP = {
     255: "none",
     1: "boil",
+    2: "warming up",
     3: "keep warm"
 }
 
@@ -79,6 +80,22 @@ class MiKettle(object):
         self._token = token
 
     def connect(self):
+        try:
+            if self._p.getState() == "conn":
+                _LOGGER.debug("already connected")
+                return;
+        except Exception as e:
+            if "Unexpected response (ntfy)" == str(e):
+                _LOGGER.debug("already connected")
+                return
+            elif "'MiKettle' object has no attribute '_p'" == str(e):
+                pass
+            elif "Helper not started (did you call connect()?)" == str(e):
+                pass
+            else:
+                raise e
+        _LOGGER.debug("connecting")
+        self.authed = False
         self._p = Peripheral(deviceAddr=self._mac, iface=self._iface)
         self._p.setDelegate(self)
 
@@ -175,6 +192,8 @@ class MiKettle(object):
         return result
 
     def auth(self):
+        if self.authed:
+            return
         auth_service = self._p.getServiceByUUID(_UUID_SERVICE_KETTLE)
         auth_descriptors = auth_service.getDescriptors()
 
@@ -191,6 +210,7 @@ class MiKettle(object):
         self._p.writeCharacteristic(_HANDLE_AUTH, MiKettle.cipher(self._token, _KEY2), "true")
 
         self._p.readCharacteristic(_HANDLE_VERSION)
+        self.authed = True
 
     def subscribeToData(self):
         controlService = self._p.getServiceByUUID(_UUID_SERVICE_KETTLE_DATA)
